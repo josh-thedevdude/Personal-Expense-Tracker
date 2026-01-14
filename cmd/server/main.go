@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"personal_expense_tracker/internal/db"
 	"personal_expense_tracker/internal/repository"
+	"personal_expense_tracker/internal/service"
+	handler "personal_expense_tracker/internal/transport/http"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -21,18 +24,28 @@ func main() {
 	if err != nil {
 		log.Fatal("main_error: db connection failed with error" + err.Error())
 	}
+	defer db.Close()
 
-	// create repo instance
-	repository.NewExpenseRepostory(db)
+	expenseRepo := repository.NewExpenseRepostory(db)
+	expenseService := service.NewExpenseService(expenseRepo)
+	expenseHandler := handler.NewExpenseHandler(expenseService)
 
-	// create service instance
+	mux := http.NewServeMux()
 
-	// create handler instance
+	mux.HandleFunc("POST /expenses", expenseHandler.CreateExpense)
+	mux.HandleFunc("GET /expenses", expenseHandler.GetExpenses)
+	mux.HandleFunc("GET /expenses/{id}", expenseHandler.GetExpenseById)
+	mux.HandleFunc("PATCH /expenses/{id}", expenseHandler.UpdateExpenseById)
+	mux.HandleFunc("DELETE /expenses/{id}", expenseHandler.DeleteExpenseById)
 
-	// serve app
-	err = http.ListenAndServe(":8080", nil)
-	if err != nil {
-		log.Fatal("main_error: failed to listen on port:8080")
+	server := &http.Server{
+		Addr:         ":8080",
+		Handler:      mux,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
-	log.Print("listening on port:8080")
+
+	log.Println("🚀 Server running on http://localhost:8080")
+	log.Fatal(server.ListenAndServe())
 }
